@@ -35,39 +35,39 @@ bool Gemm::IsOnnxNodeSupported(const onnxruntime::Node& node, const GraphViewer&
     const auto* B_type = B_arg.TypeAsProto();
     const auto* C_type = C_arg.TypeAsProto();
 
-    if (A_type == nullptr || B_type == nullptr || C_type == nullptr || 
+    if (A_type == nullptr || B_type == nullptr || C_type == nullptr ||
         A_type->tensor_type().elem_type() != ONNX_NAMESPACE::TensorProto_DataType_FLOAT ||
         B_type->tensor_type().elem_type() != ONNX_NAMESPACE::TensorProto_DataType_FLOAT ||
         C_type->tensor_type().elem_type() != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
         printf("Gemm XNNPACK not supported - currently only float Gemm is supported");
         break;
     }
-    
+
     // B matrix must be constant
     if (B_arg.Exists() && graph.GetConstantInitializer(B_arg.Name(), true) == nullptr) {
         printf("Gemm XNNPACK not supported - B must be a const");
         break;
-    }    
+    }
 
     // making sure we are dealing with MatMul
     const auto* A_shape = A_arg.Shape();
     const auto* B_shape = B_arg.Shape();
-    const auto* C_shape = C_arg.Shape(); 
+    const auto* C_shape = C_arg.Shape();
 
     if (!A_shape || A_shape->dim_size() > 3) {
         printf("Gemm XNNPACK not supported - only up to 2D opps are supported\n");
         break;
-    }    
+    }
 
     if (!B_shape || B_shape->dim_size() > 3) {
         printf("Gemm XNNPACK not supported - only up to 2D opps are supported\n");
         break;
-    }    
+    }
 
     if (!C_shape || C_shape->dim_size() > 3) {
         printf("Gemm XNNPACK not supported - only up to 2D opps are supported\n");
         break;
-    } 
+    }
 
     // if there's a bias input it must be constant
     if (input_defs.size() == 3) {
@@ -75,7 +75,7 @@ bool Gemm::IsOnnxNodeSupported(const onnxruntime::Node& node, const GraphViewer&
         break;
       }
     }
-    
+
     supported = true;
 
   } while (false);
@@ -122,7 +122,7 @@ Gemm::Gemm(const OpKernelInfo& info) : GemmBase(info), OpKernel(info){
     N = B.Shape()->dim_size() == 3 ? B.Shape()->dim(2).dim_value() : B.Shape()->dim(1).dim_value();
   } else {
     N = B.Shape()->dim_size() == 3 ? B.Shape()->dim(1).dim_value() : B.Shape()->dim(2).dim_value();
-  } 
+  }
 
   //printf("M - %d\n", (int)M);
   //printf("N - %d\n", (int)N);
@@ -133,21 +133,19 @@ Gemm::Gemm(const OpKernelInfo& info) : GemmBase(info), OpKernel(info){
 Status Gemm::PrePack(const Tensor& tensor,int input_idx, AllocatorPtr alloc,
                      /*out*/ bool& is_packed,
                      /*out*/ PrePackedWeights* prepacked_weights) {
-  //printf("pre-pack GEMM XNNPACK\n");
-  prepacked_weights = nullptr;
   is_packed = false;
 
   if (input_idx == 0) {
     return Status::OK();
   }
-    
+
   is_packed = true;
 
   if (input_idx ==  1) {
     B_ = Tensor::Create(tensor.DataType(), TensorShape(tensor.Shape()), alloc);
     //memcpy(B_->Data<short>, tensor.DataRaw(), sizeof(tensor.DataType())*tensor.Shape()[0]*tensor.Shape()[1]);
     SingleAxisTranspose(std::vector<size_t> {0, 1}, tensor, *B_, /*from*/ 1, /*to*/ 1);
-#ifdef DEBUG
+#if 0
     //Debug - printing the tensors
     printf("B shape is - %lld x %lld \n", B_->Shape()[0], B_->Shape()[1]);
 
@@ -169,7 +167,7 @@ Status Gemm::PrePack(const Tensor& tensor,int input_idx, AllocatorPtr alloc,
 
   if (input_idx == 2) {
     xnn_status status = xnn_status::xnn_status_uninitialized;
-#ifdef DEBUG
+#if 0
     //Debug - printing the tensors
     printf("C shape is - %lld \n", tensor.Shape()[0]);
 
@@ -178,7 +176,7 @@ Status Gemm::PrePack(const Tensor& tensor,int input_idx, AllocatorPtr alloc,
     for (int i = 0; i < tensor.Shape()[0]; i++) {
 
       printf("%f, ", tensor.Data<float>()[i]);
-      
+
     }
     printf("]\n");
     ///
@@ -218,21 +216,21 @@ Status Gemm::Compute(OpKernelContext* context) const {
   if (M == 0 || N == 0)
     return Status::OK();
 
-  auto Y = context->Output(0, {M, N}); 
-  
+  auto Y = context->Output(0, {M, N});
+
   //const TensorShape* c_shape = C != nullptr ? &C->Shape() : nullptr;
 
   xnn_status status = xnn_setup_fully_connected_nc_f32(
         op0_.get(),
         trans_A_ != CblasNoTrans ? K : M,
         A->Data<float>(),
-        Y->MutableData<float>(), 
+        Y->MutableData<float>(),
         nullptr);
   //printf("executing GEMM XNNPACK\n");
   status = xnn_run_operator(op0_.get(), nullptr);
   if (status != xnn_status_success) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "xnn_run_operator returned ", status);
-  }  
+  }
 #if 0
   // Debug
   // const auto* C = context->Input<Tensor>(2);

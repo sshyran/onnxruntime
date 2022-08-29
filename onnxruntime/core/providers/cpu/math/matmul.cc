@@ -176,29 +176,12 @@ Status MatMul<float>::Compute(OpKernelContext* ctx) const {
   if (y->Shape().Size() == 0)
     return Status::OK();
 
-  const auto* a_data = a->Data<float>();
-  const auto* b_data = b ? b->Data<float>() : nullptr;
-  auto* y_data = y->MutableData<float>();
-
   const size_t max_len = helper.OutputOffsets().size();
   const size_t M = static_cast<size_t>(helper.M());
   const size_t N = static_cast<size_t>(helper.N());
   const size_t K = static_cast<size_t>(helper.K());
-  const size_t lda = helper.Lda(trans_a);
-  const size_t ldb = helper.Ldb(trans_b);
 
   std::vector<MLAS_SGEMM_DATA_PARAMS> data(max_len);
-  for (size_t i = 0; i < max_len; i++) {
-    data[i].BIsPacked = bool(packed_b_);
-    data[i].A = a_data + helper.LeftOffsets()[i];
-    data[i].lda = lda;
-    data[i].B = data[i].BIsPacked ? (float*)packed_b_.get() : b_data + helper.RightOffsets()[i];
-    data[i].ldb = ldb;
-    data[i].C = y_data + helper.OutputOffsets()[i];
-    data[i].ldc = N;
-    data[i].alpha = alpha_attr_;
-    data[i].beta = 0.0f;
-  }
   MlasGemmBatch(trans_a ? CblasTrans : CblasNoTrans, trans_b ? CblasTrans : CblasNoTrans,
                 M, N, K, data.data(), max_len, thread_pool);
 

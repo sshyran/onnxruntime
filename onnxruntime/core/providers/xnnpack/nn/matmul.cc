@@ -35,27 +35,27 @@ bool MatMul::IsOnnxNodeSupported(const onnxruntime::Node& node, const GraphViewe
     const auto* A_type = A_arg.TypeAsProto();
     const auto* B_type = B_arg.TypeAsProto();
 
-    if (A_type == nullptr || B_type == nullptr ||  
+    if (A_type == nullptr || B_type == nullptr ||
         A_type->tensor_type().elem_type() != ONNX_NAMESPACE::TensorProto_DataType_FLOAT ||
         B_type->tensor_type().elem_type() != ONNX_NAMESPACE::TensorProto_DataType_FLOAT ) {
         printf("MatMul XNNPACK not supported - currently only float Gemm is supported\n");
         break;
     }
-    
+
     // B matrix must be constant
     if (B_arg.Exists() && graph.GetConstantInitializer(B_arg.Name(), true) == nullptr) {
         //printf("MatMul XNNPACK not supported - B must be a const\n");
         break;
-    }    
+    }
 
     // making sure we are dealing with MatMul
-    const auto* B_shape = B_arg.Shape();  
+    const auto* B_shape = B_arg.Shape();
 
     if (!B_shape || B_shape->dim_size() > 3) {
         printf("MatMul XNNPACK not supported - only up to 2D opps are supported\n");
         break;
-    }    
-    
+    }
+
     supported = true;
 
   } while (false);
@@ -78,7 +78,6 @@ Status MatMul::PrePack(const Tensor& tensor,int input_idx, AllocatorPtr alloc,
                      /*out*/ bool& is_packed,
                      /*out*/ PrePackedWeights* prepacked_weights) {
 
-  prepacked_weights = nullptr;
   is_packed = false;
 
   if (input_idx == 0) {
@@ -157,34 +156,19 @@ Status MatMul::Compute(OpKernelContext* ctx) const {
 #endif
 
   const size_t max_len = a->Shape().NumDimensions() > 2 ? a->Shape()[1] : 1;
-  const size_t M = static_cast<size_t>(helper.M());
-  const size_t N = static_cast<size_t>(helper.N());
-  const size_t K = static_cast<size_t>(helper.K());
-  const size_t lda = helper.Lda(trans_a);
-  const size_t ldb = helper.Ldb(trans_b);
-
-  if (max_len > 1 && a->Shape().NumDimensions() > 2) {
-    printf("we got a true batch\n");
-    printf("a->Shape()[0] - %d\n", (int)a->Shape()[0]);
-    printf("a->Shape()[1] - %d\n", (int)a->Shape()[1]);
-    printf("a->Shape()[2] - %d\n", (int)a->Shape()[2]);
-    printf("y->Shape()[0] - %d\n", (int)y->Shape()[0]);
-    printf("y->Shape()[1] - %d\n", (int)y->Shape()[1]);
-    printf("y->Shape()[2] - %d\n", (int)y->Shape()[2]);
-  }
 
   xnn_status status = xnn_setup_fully_connected_nc_f32(
       op0_.get(),
       max_len,
       //(a->Shape().NumDimensions() > 2) ? packed_w_->Data<float>() : a->Data<float>(),
       a->Data<float>(),
-      y_data, 
+      y_data,
       nullptr);
 
   status = xnn_run_operator(op0_.get(), nullptr);
   if (status != xnn_status_success) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "xnn_run_operator returned ", status);
-  }  
+  }
 
   return Status::OK();
 }
