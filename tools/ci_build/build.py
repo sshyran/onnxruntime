@@ -2706,7 +2706,7 @@ def main():
             run_nodejs_tests(nodejs_binding_dir)
 
         nodejs_test_data_dir = os.path.join(source_dir, "js", "test")
-        dest_dir = os.path.join(Path(build_dir).parent.absolute(), "models")
+        dest_dir = os.path.join(Path(build_dir).parent.absolute(), "models", "js")
         if os.path.exists(nodejs_test_data_dir):
             shutil.copytree(nodejs_test_data_dir, dest_dir)
 
