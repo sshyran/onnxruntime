@@ -2700,6 +2700,16 @@ def main():
         build_targets(args, cmake_path, build_dir, configs, num_parallel_jobs, args.target)
 
     if args.test:
+        # run node.js binding tests
+        nodejs_binding_dir = os.path.normpath(os.path.join(source_dir, "js", "node"))
+        if args.build_nodejs and not args.skip_nodejs_tests:
+            run_nodejs_tests(nodejs_binding_dir)
+
+        nodejs_test_data_dir = os.path.join(source_dir, "js", "test")
+        dest_dir = os.path.join(Path(build_dir).parent.absolute(), "models")
+        if os.path.exists(nodejs_test_data_dir):
+            shutil.copytree(nodejs_test_data_dir, dest_dir)
+
         run_onnxruntime_tests(args, source_dir, ctest_path, build_dir, configs)
 
         if args.enable_pybind and not args.skip_onnx_tests and args.use_nuphar:
@@ -2711,10 +2721,6 @@ def main():
         if args.enable_pybind and args.use_tvm and not is_windows():
             tvm_run_python_tests(build_dir, configs)
 
-        # run node.js binding tests
-        if args.build_nodejs and not args.skip_nodejs_tests:
-            nodejs_binding_dir = os.path.normpath(os.path.join(source_dir, "js", "node"))
-            run_nodejs_tests(nodejs_binding_dir)
 
     # Build packages after running the tests.
     # NOTE: if you have a test that rely on a file which only get copied/generated during packaging step, it could
